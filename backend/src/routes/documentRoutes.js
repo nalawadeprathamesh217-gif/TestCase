@@ -17,7 +17,7 @@ router.get('/:id', documentController.getDocumentById);
 router.get('/:id/chunks', documentController.getDocumentChunks);
 
 router.post('/', requireRole(['admin', 'tester']), upload.single('file'), documentController.uploadDocument);
-router.post('/:id/reprocess', requireRole(['admin', 'tester']), documentController.reprocessDocument);
+router.post('/:id/process', requireRole(['admin', 'tester']), documentController.processDocument);
 router.delete('/:id', requireRole(['admin', 'tester']), documentController.deleteDocument);
 
 module.exports = router;

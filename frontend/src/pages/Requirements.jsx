@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import AppLayout from '../layouts/AppLayout';
+import InfoTooltip from '../components/InfoTooltip';
 import { Plus, Search, Eye, Edit, Trash2, AlertCircle, Filter } from 'lucide-react';
+
 
 const PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 const STATUSES = ['Draft', 'Under Review', 'Approved', 'Rejected', 'Archived'];
@@ -171,12 +173,27 @@ export default function Requirements() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Requirements</h1>
-            <p className="text-slate-500 text-sm mt-1">Manage software requirements</p>
+            <h1 className="text-2xl font-bold text-slate-800 flex items-center">
+              Requirements
+              <InfoTooltip text="A requirement describes what the system should do or what rule it should follow." />
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">Define what your software needs to do before creating test cases.</p>
           </div>
-          <button onClick={() => { setEditData(null); setModalOpen(true); }} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-            <Plus className="w-4 h-4" /> Add Requirement
-          </button>
+          <Link to="/requirements/new" className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+            <Plus className="w-4 h-4" /> Create Requirement
+          </Link>
+        </div>
+
+        {/* Info box */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4 text-sm text-blue-800">
+          <p className="font-medium mb-2">Requirement Statuses:</p>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            <li><span className="font-semibold">Draft:</span> Still being prepared.</li>
+            <li><span className="font-semibold">Under Review:</span> Being checked before approval.</li>
+            <li><span className="font-semibold">Approved:</span> Ready to be used for test cases.</li>
+            <li><span className="font-semibold">Rejected:</span> Needs changes before approval.</li>
+            <li><span className="font-semibold">Archived:</span> Kept for history.</li>
+          </ul>
         </div>
 
         {/* Filters */}
@@ -201,8 +218,11 @@ export default function Requirements() {
             <div className="text-center py-16 text-slate-400">Loading requirements...</div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-slate-500 mb-2">No requirements found.</p>
-              <button onClick={() => { setEditData(null); setModalOpen(true); }} className="text-blue-600 text-sm font-medium hover:underline">+ Add your first requirement</button>
+              <p className="text-slate-800 font-medium mb-1">No requirements yet</p>
+              <p className="text-slate-500 mb-4 text-sm max-w-md mx-auto">Requirements describe what your software should do. Start by creating a requirement to define a new feature or rule.</p>
+              <Link to="/requirements/new" className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                Create Requirement
+              </Link>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -225,7 +245,7 @@ export default function Requirements() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <Link to={`/requirements/${req.id}`} className="p-1 text-slate-400 hover:text-blue-600 rounded"><Eye className="w-4 h-4" /></Link>
-                          <button onClick={() => { setEditData(req); setModalOpen(true); }} className="p-1 text-slate-400 hover:text-green-600 rounded"><Edit className="w-4 h-4" /></button>
+                          <Link to={`/requirements/${req.id}/edit`} className="p-1 text-slate-400 hover:text-green-600 rounded"><Edit className="w-4 h-4" /></Link>
                           <button onClick={() => handleDelete(req.id)} className="p-1 text-slate-400 hover:text-red-600 rounded"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </td>

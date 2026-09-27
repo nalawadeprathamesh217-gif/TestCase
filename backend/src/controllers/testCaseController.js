@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { v4: uuidv4 } = require('uuid');
 
 // [ALGO-SHA256]
 // ============================================================
@@ -77,6 +78,26 @@ exports.createTestCase = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Create initial version 1
+    await supabase.from('test_case_versions').insert([{
+      id: uuidv4(),
+      test_case_id: data.id,
+      version_number: 1,
+      title: data.title,
+      description: data.description,
+      preconditions: data.preconditions,
+      test_steps: data.test_steps,
+      expected_result: data.expected_result,
+      test_type: data.test_type,
+      priority: data.priority,
+      risk: data.risk,
+      status: data.status,
+      change_summary: 'Initial creation',
+      change_type: 'Created',
+      created_by: req.user.id
+    }]);
+
     res.status(201).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -96,6 +117,42 @@ exports.updateTestCase = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Check if we need to create a new version (meaningful changes)
+    if (updates.title || updates.description || updates.test_steps || updates.expected_result || updates.preconditions) {
+      // Find current max version
+      const { data: latestVersion } = await supabase
+        .from('test_case_versions')
+        .select('version_number')
+        .eq('test_case_id', id)
+        .order('version_number', { ascending: false })
+        .limit(1)
+        .single();
+      
+      const nextVersionNumber = latestVersion ? latestVersion.version_number + 1 : 1;
+      
+      await supabase.from('test_case_versions').insert([{
+        id: uuidv4(),
+        test_case_id: id,
+        version_number: nextVersionNumber,
+        title: data.title,
+        description: data.description,
+        preconditions: data.preconditions,
+        test_steps: data.test_steps,
+        expected_result: data.expected_result,
+        test_type: data.test_type,
+        priority: data.priority,
+        risk: data.risk,
+        status: data.status,
+        change_summary: 'Updated test case',
+        change_type: 'Modified',
+        created_by: req.user.id
+      }]);
+      
+      // Update version count in main record
+      await supabase.from('test_cases').update({ version_count: nextVersionNumber, quality_stale: true }).eq('id', id);
+    }
+
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

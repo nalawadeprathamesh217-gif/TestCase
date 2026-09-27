@@ -47,7 +47,13 @@ export default function Duplicates() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-slate-800">Duplicate Review Queue</h1>
-          <p className="text-slate-500 text-sm mt-1">Review test cases flagged by AI as potential semantic duplicates.</p>
+          <p className="text-slate-500 text-sm mt-1">Find and merge similar test cases using AI.</p>
+        </div>
+
+        {/* Workflow Info */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-800">
+          <p className="font-semibold mb-2">How it works:</p>
+          <p>AI compares new test cases against existing ones to prevent duplicates. Review the suggestions below and decide whether they are duplicates or unique tests.</p>
         </div>
 
         {loading ? (

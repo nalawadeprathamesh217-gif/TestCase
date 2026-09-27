@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import AppLayout from '../layouts/AppLayout';
-import { ArrowLeft, FileText, FlaskConical, Sparkles, Calendar, User } from 'lucide-react';
+import { ArrowLeft, FileText, FlaskConical, Sparkles, Calendar, User, Edit2 } from 'lucide-react';
 
 const StatusBadge = ({ status }) => {
   const colors = { 'Draft': 'bg-slate-100 text-slate-600', 'Under Review': 'bg-amber-100 text-amber-700', 'Approved': 'bg-green-100 text-green-700', 'Rejected': 'bg-red-100 text-red-700', 'Archived': 'bg-slate-100 text-slate-400' };
@@ -43,9 +43,16 @@ export default function RequirementDetail() {
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate('/requirements')} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><ArrowLeft className="w-4 h-4" /></button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">{requirement.requirement_id}</h1>
-            <p className="text-slate-500 text-sm">{requirement.title}</p>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Requirement Details</h1>
+            <p className="text-slate-500 text-sm mt-1">Review the requirement and its source before creating test cases.</p>
           </div>
+          <Link
+            to={`/requirements/${id}/edit`}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Edit2 className="w-4 h-4" /> Edit
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -98,10 +105,21 @@ export default function RequirementDetail() {
                 </div>
               )}
               <div className="mt-4 border-t border-slate-100 pt-4">
-                <Link to={`/requirements/${id}/generate`} className="flex items-center justify-center gap-2 w-full p-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-sm">
-                  <Sparkles className="w-4 h-4" />
-                  Generate AI Test Cases
-                </Link>
+                {requirement.status === 'Approved' ? (
+                  <>
+                    <p className="text-[10px] text-slate-500 mb-3 text-center leading-relaxed">
+                      Create AI-generated test case suggestions from this approved requirement. You can review, edit, accept, or reject each suggestion.
+                    </p>
+                    <Link to={`/requirements/${id}/generate`} className="flex items-center justify-center gap-2 w-full p-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-sm">
+                      <Sparkles className="w-4 h-4" />
+                      Generate AI Test Cases
+                    </Link>
+                  </>
+                ) : (
+                  <div className="text-center bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p className="text-xs font-medium text-amber-800">Approve this requirement before generating AI test cases.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

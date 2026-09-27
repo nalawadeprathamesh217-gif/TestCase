@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import api from '../services/api';
 import AppLayout from '../layouts/AppLayout';
 import { Upload, FileText, FileType, CheckCircle, XCircle, Clock, AlertTriangle, RefreshCw, Eye, Trash2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 const StatusBadge = ({ status }) => {
   const cfg = {
@@ -24,6 +24,11 @@ export default function RequirementDocuments() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState('');
   const fileInputRef = useRef();
+  const navigate = useNavigate();
+
+  const handleViewDocument = (documentId) => {
+    navigate(`/requirement-documents/${documentId}`);
+  };
 
   const MAX_SIZE_MB = 25;
   const ALLOWED_TYPES = ['.pdf', '.docx', '.txt'];
@@ -77,7 +82,14 @@ export default function RequirementDocuments() {
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-slate-800">Requirement Documents</h1>
-          <p className="text-slate-500 text-sm mt-1">Upload and extract software requirements from project documents.</p>
+          <p className="text-slate-500 text-sm mt-1">Upload a PDF, DOCX, or TXT file to extract requirements from your existing documentation.</p>
+        </div>
+
+        {/* Workflow Info */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-800">
+          <p className="font-semibold mb-2">How it works:</p>
+          <p className="mb-2">Upload Document → Extract Text → Find Candidate Requirements → Review and Edit → Approve Requirements</p>
+          <p className="text-blue-700 italic">AI or automatic extraction provides suggestions. Always review extracted requirements before approving them.</p>
         </div>
 
         {/* Upload Area */}
@@ -130,8 +142,8 @@ export default function RequirementDocuments() {
           ) : documents.length === 0 ? (
             <div className="text-center py-16">
               <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500">No documents uploaded yet.</p>
-              <p className="text-sm text-slate-400 mt-1">Upload your first document above.</p>
+              <p className="text-slate-800 font-medium mb-1">No documents yet</p>
+              <p className="text-sm text-slate-500 max-w-sm mx-auto">Upload a document above to automatically extract requirements using AI.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -152,7 +164,12 @@ export default function RequirementDocuments() {
                       <td className="px-4 py-3"><StatusBadge status={doc.processing_status} /></td>
                       <td className="px-4 py-3 text-slate-400">{new Date(doc.created_at).toLocaleDateString()}</td>
                       <td className="px-4 py-3">
-                        <Link to={`/requirement-documents/${doc.id}`} className="p-1 text-slate-400 hover:text-blue-600 rounded inline-flex"><Eye className="w-4 h-4" /></Link>
+                        <button 
+                          onClick={() => handleViewDocument(doc.id)} 
+                          className="p-1 text-slate-400 hover:text-blue-600 rounded inline-flex cursor-pointer"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))}

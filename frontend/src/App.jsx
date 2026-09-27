@@ -7,11 +7,15 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import Dashboard from './pages/Dashboard';
 import Requirements from './pages/Requirements';
+import RequirementCreate from './pages/RequirementCreate';
 import RequirementDetail from './pages/RequirementDetail';
+import RequirementEdit from './pages/RequirementEdit';
 import TestCases from './pages/TestCases';
+import TestCaseCreate from './pages/TestCaseCreate';
 import TestExecution from './pages/TestExecution';
 import TestCaseDetail from './pages/TestCaseDetail';
 import RequirementDocuments from './pages/RequirementDocuments';
+import RequirementDocumentDetail from './pages/RequirementDocumentDetail';
 import AiGeneration from './pages/AiGeneration';
 import Imports from './pages/Imports';
 import ImportDetail from './pages/ImportDetail';
@@ -45,11 +49,15 @@ function App() {
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/requirements" element={<ProtectedRoute><Requirements /></ProtectedRoute>} />
+        <Route path="/requirements/new" element={<ProtectedRoute><RequirementCreate /></ProtectedRoute>} />
         <Route path="/requirements/:id" element={<ProtectedRoute><RequirementDetail /></ProtectedRoute>} />
+        <Route path="/requirements/:id/edit" element={<ProtectedRoute><RequirementEdit /></ProtectedRoute>} />
         <Route path="/requirements/:id/generate" element={<ProtectedRoute><AiGeneration /></ProtectedRoute>} />
         <Route path="/test-cases" element={<ProtectedRoute><TestCases /></ProtectedRoute>} />
+        <Route path="/test-cases/new" element={<ProtectedRoute><TestCaseCreate /></ProtectedRoute>} />
         <Route path="/test-cases/:id" element={<ProtectedRoute><TestCaseDetail /></ProtectedRoute>} />
         <Route path="/requirement-documents" element={<ProtectedRoute><RequirementDocuments /></ProtectedRoute>} />
+        <Route path="/requirement-documents/:id" element={<ProtectedRoute><RequirementDocumentDetail /></ProtectedRoute>} />
         <Route path="/execution" element={<ProtectedRoute><TestExecution /></ProtectedRoute>} />
         <Route path="/duplicates" element={<ProtectedRoute><Duplicates /></ProtectedRoute>} />
         <Route path="/imports" element={<ProtectedRoute><Imports /></ProtectedRoute>} />

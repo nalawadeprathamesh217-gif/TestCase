@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { v4: uuidv4 } = require('uuid');
 const aiProvider = require('../services/ai/GeminiProvider');
+const { retryWithBackoff } = require('../utils/retryHelper');
 
 // [AI-GENERATION]
 // ============================================================
@@ -93,24 +94,74 @@ exports.generateTestCases = async (req, res) => {
     // authoritative application data.
     
     let generatedCases;
+    let finalAttemptCount = 1;
+    let fallbackUsed = false;
+
     try {
-      // Set a timeout using Promise.race in the real implementation if needed,
-      // but for now we just call the provider.
-      const aiResponse = await aiProvider.generateTestCases(requirement, count || 10);
+      console.log(`[AI] Gemini generation started for requirement ${requirementId}`);
+      
+      const aiResponse = await retryWithBackoff(async (attempt) => {
+        finalAttemptCount = attempt;
+        console.log(`[AI] Attempt ${attempt}/3`);
+        
+        // Update run attempt_count
+        await supabase
+          .from('test_case_generation_runs')
+          .update({ attempt_count: attempt, status: 'processing' })
+          .eq('id', runId);
+
+        return await aiProvider.generateTestCases(requirement, count || 10);
+      }, {
+        maxAttempts: 3,
+        baseDelayMs: 2000,
+        onRetry: async (error, attempt, delay) => {
+          const status = error.status || error.statusCode || 500;
+          console.log(`[AI] Gemini returned ${status}: ${error.message}`);
+          console.log(`[AI] Temporary error. Retrying in approximately ${Math.round(delay / 1000)} seconds`);
+        }
+      });
       
       if (!aiResponse || !aiResponse.testCases || !Array.isArray(aiResponse.testCases)) {
         throw new Error('Malformed AI response from provider.');
       }
       
+      console.log('[AI] Gemini generation successful');
+      console.log('[AI] Generation completed');
       generatedCases = aiResponse.testCases;
     } catch (aiErr) {
+      if (finalAttemptCount >= 3) {
+        console.log(`[AI] Gemini still unavailable`);
+        console.log(`[AI] Generation failed after 3 attempts`);
+      }
+      console.error('Gemini API error:', aiErr.message);
+      
       // Update run status to failed
       await supabase
         .from('test_case_generation_runs')
-        .update({ status: 'failed', error_message: aiErr.message })
+        .update({ 
+          status: 'failed', 
+          error_message: aiErr.message,
+          attempt_count: finalAttemptCount,
+          failure_reason: 'Gemini API Error'
+        })
         .eq('id', runId);
-        
-      return res.status(500).json({ success: false, message: 'AI generation is temporarily unavailable. Please try again.' });
+      
+      const status = aiErr.status || aiErr.statusCode || 500;
+      const isRetryable = status === 408 || status === 429 || status >= 500 || aiErr.message.toLowerCase().includes('timeout');
+
+      if (isRetryable) {
+        return res.status(503).json({ 
+          success: false, 
+          message: 'AI generation is temporarily unavailable because the AI service is busy. Please try again in a few moments.',
+          retryable: true
+        });
+      } else {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'AI service configuration is invalid or failed. ' + aiErr.message,
+          retryable: false
+        });
+      }
     }
 
     //
@@ -124,11 +175,15 @@ exports.generateTestCases = async (req, res) => {
     // Therefore we validate the required fields, data types, etc.
     
     const candidates = generatedCases.map(tc => {
-      // Simple validation fallback
+      // Ensure arrays are stringified or handled if required, but Supabase accepts JS arrays into JSONB.
+      // However, if the columns are TEXT, arrays might cause issues. 
+      // We will stringify arrays just in case, but if Supabase handles them, it's fine.
+      // Wait, let's keep it as is, but ensure we pass requirement_id and no 'status' column.
       return {
         id: uuidv4(),
-        run_id: runId,
+        generation_run_id: runId,
         requirement_id: requirementId,
+        temporary_id: `TC-AI-${Math.floor(Math.random() * 10000)}`,
         title: tc.title || 'Untitled Test Case',
         description: tc.description || '',
         preconditions: tc.preconditions || '',
@@ -137,14 +192,26 @@ exports.generateTestCases = async (req, res) => {
         test_type: tc.testType || tc.test_type || 'Functional',
         priority: tc.priority || 'Medium',
         risk: tc.risk || 'Medium',
-        status: 'pending_review'
+        review_status: 'Pending'
       };
     });
 
     // Save candidates to the database
-    // (Assuming we have a test_case_generation_candidates table or similar, 
-    // but the project might be inserting directly as 'Draft' or returning them)
-    // We will just return them for the user to review.
+    const { error: insertError } = await supabase
+      .from('test_case_generation_candidates')
+      .insert(candidates);
+
+    if (insertError) {
+      console.error('Error inserting candidates:', insertError);
+      
+      // Cleanup orphaned run
+      await supabase
+        .from('test_case_generation_runs')
+        .update({ status: 'failed', failure_reason: 'Database insert failed' })
+        .eq('id', runId);
+        
+      throw new Error('Failed to save generated candidates');
+    }
     
     await supabase
       .from('test_case_generation_runs')
@@ -154,7 +221,7 @@ exports.generateTestCases = async (req, res) => {
     res.status(200).json({ 
       success: true, 
       message: 'AI generation completed',
-      data: { generationRunId: run.id, candidates }
+      data: { generationRunId: runId, candidates }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -175,5 +242,75 @@ exports.getGenerationHistory = async (req, res) => {
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.acceptCandidate = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    
+    // 1. Get candidate
+    const { data: candidate, error: candidateError } = await supabase
+      .from('test_case_generation_candidates')
+      .select('*, test_case_generation_runs(*)')
+      .eq('id', candidateId)
+      .single();
+
+    if (candidateError || !candidate) {
+      return res.status(404).json({ success: false, message: 'Candidate not found' });
+    }
+
+    if (candidate.review_status === 'Accepted') {
+      return res.status(400).json({ success: false, message: 'Test case has already been accepted.' });
+    }
+
+    const requirementId = candidate.test_case_generation_runs.requirement_id;
+
+    // 2. Generate a Test Case ID
+    const { data: latestTc } = await supabase
+      .from('test_cases')
+      .select('test_case_id')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+      
+    let nextNum = 1;
+    if (latestTc && latestTc.test_case_id && latestTc.test_case_id.startsWith('TC-')) {
+      const match = latestTc.test_case_id.match(/TC-(\d+)/);
+      if (match) nextNum = parseInt(match[1], 10) + 1;
+    }
+    const finalTcId = `TC-${nextNum.toString().padStart(3, '0')}`;
+
+    // 3. Insert into test_cases
+    const { data: newTc, error: tcError } = await supabase
+      .from('test_cases')
+      .insert([{
+        test_case_id: finalTcId,
+        requirement_id: requirementId,
+        title: candidate.title,
+        description: candidate.description,
+        preconditions: candidate.preconditions,
+        test_steps: candidate.test_steps,
+        expected_result: candidate.expected_result,
+        test_type: candidate.test_type || 'Functional',
+        priority: candidate.priority || 'Medium',
+        risk: candidate.risk || 'Medium',
+        status: 'Draft',
+        created_by: req.user.id
+      }])
+      .select()
+      .single();
+
+    if (tcError) throw tcError;
+
+    // 4. Mark candidate as accepted
+    await supabase
+      .from('test_case_generation_candidates')
+      .update({ review_status: 'Accepted' })
+      .eq('id', candidateId);
+
+    res.json({ success: true, message: 'Test case accepted successfully', data: newTc });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };

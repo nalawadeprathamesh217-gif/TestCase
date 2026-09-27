@@ -4,7 +4,7 @@ require('dotenv').config();
 
 const app = express();
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+app.use(cors({ origin: [process.env.CORS_ORIGIN, 'http://localhost:5173', 'http://localhost:5174'].filter(Boolean) }));
 app.use(express.json());
 
 // Routes will be added here

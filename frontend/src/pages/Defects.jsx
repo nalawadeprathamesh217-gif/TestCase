@@ -56,7 +56,7 @@ export default function Defects() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Defects</h1>
-          <p className="text-slate-500 text-sm mt-1">Track and resolve issues identified during execution.</p>
+          <p className="text-slate-500 text-sm mt-1">Track system bugs and link them to failing test cases.</p>
         </div>
       </div>
 

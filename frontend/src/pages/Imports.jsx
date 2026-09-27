@@ -62,9 +62,20 @@ export default function Imports() {
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-end mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Test Case Imports</h1>
+            <h1 className="text-2xl font-bold text-slate-800">Import Test Cases</h1>
             <p className="text-slate-500 text-sm mt-1">Import existing test cases from Excel or CSV files.</p>
           </div>
+        </div>
+
+        {/* Workflow Info */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-800">
+          <p className="font-semibold mb-2">How it works:</p>
+          <p className="mb-2">Upload → Choose Sheet → Map Columns → Validate → Review → Import</p>
+          <ul className="list-disc pl-5 space-y-1 text-blue-700">
+            <li><span className="font-semibold text-blue-800">Column mapping</span> tells the system which spreadsheet column belongs to each test case field.</li>
+            <li><span className="font-semibold text-blue-800">Validation</span> checks your file before importing so incorrect data can be identified.</li>
+            <li><span className="font-semibold text-blue-800">Duplicate detection</span> checks whether similar test cases already exist before importing.</li>
+          </ul>
         </div>
 
         {/* Upload Zone */}
@@ -110,7 +121,8 @@ export default function Imports() {
           ) : imports.length === 0 ? (
             <div className="p-10 text-center text-slate-500">
               <FileSpreadsheet className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-              <p>No imports yet. Upload a file to begin.</p>
+              <p className="text-slate-800 font-medium">No imports yet</p>
+              <p className="text-sm mt-1">Upload a file above to begin the import process.</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">

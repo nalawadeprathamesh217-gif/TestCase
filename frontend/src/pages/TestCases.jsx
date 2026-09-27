@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import AppLayout from '../layouts/AppLayout';
+import InfoTooltip from '../components/InfoTooltip';
 import { Plus, Search, Eye, Edit, Trash2, Filter, Save, X, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
 
 const TEST_TYPES = ['Functional', 'Negative', 'Validation', 'Boundary', 'Integration', 'Regression', 'Security', 'Performance', 'Other'];
@@ -107,11 +108,14 @@ export default function TestCases() {
       <div className="max-w-7xl mx-auto flex flex-col h-[calc(100vh-6rem)]">
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Test Cases</h1>
-            <p className="text-slate-500 text-sm mt-1">Advanced Search & Filtering</p>
+            <h1 className="text-2xl font-bold text-slate-800 flex items-center">
+              Test Cases
+              <InfoTooltip text="A test case describes the exact steps used to check whether a requirement works correctly." />
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">Create, review, search, and manage the tests used to verify your requirements.</p>
           </div>
           <button onClick={() => navigate('/test-cases/new')} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-            <Plus className="w-4 h-4" /> Add Test Case
+            <Plus className="w-4 h-4" /> Create Test Case
           </button>
         </div>
 
@@ -186,9 +190,13 @@ export default function TestCases() {
             ) : testCases.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full">
                 <Search className="w-12 h-12 text-slate-300 mb-4" />
-                <p className="text-slate-500 font-medium mb-1">No test cases found</p>
-                <p className="text-slate-400 text-sm mb-4">Try removing some filters or searching a different keyword.</p>
-                <button onClick={clearFilters} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">Clear All Filters</button>
+                <p className="text-slate-800 font-medium mb-1">No test cases yet</p>
+                <p className="text-slate-500 text-sm mb-4 max-w-md text-center">Test cases describe how you will verify your requirements. Try removing some filters, or create a new test case.</p>
+                <div className="flex gap-3">
+                  <button onClick={clearFilters} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">Clear Filters</button>
+                  <button onClick={() => navigate('/test-cases/new')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">Create Test Case</button>
+                  <button onClick={() => navigate('/imports')} className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium transition-colors">Import Test Cases</button>
+                </div>
               </div>
             ) : (
               <table className="w-full text-sm text-left">

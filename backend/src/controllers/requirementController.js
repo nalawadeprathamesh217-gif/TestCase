@@ -92,11 +92,58 @@ exports.createRequirement = async (req, res) => {
 exports.updateRequirement = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
-    
+
+    // Verify the requirement exists first
+    const { data: existing, error: fetchErr } = await supabase
+      .from('requirements')
+      .select('id, source_document_id, source_chunk_id, source_page_number, source_reference')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !existing) {
+      return res.status(404).json({ success: false, message: 'Requirement not found' });
+    }
+
+    // Whitelist only the fields users are allowed to edit.
+    // Source traceability fields are NEVER overwritten from user input.
+    const EDITABLE_FIELDS = [
+      'requirement_id', 'title', 'description', 'actor',
+      'preconditions', 'business_rules', 'acceptance_criteria',
+      'priority', 'status',
+    ];
+
+    const safeUpdates = {};
+    for (const field of EDITABLE_FIELDS) {
+      if (req.body[field] !== undefined) {
+        safeUpdates[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(safeUpdates).length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid fields provided for update' });
+    }
+
+    // Validate required fields when present
+    if (safeUpdates.requirement_id !== undefined && !safeUpdates.requirement_id.trim()) {
+      return res.status(400).json({ success: false, message: 'Requirement ID cannot be empty' });
+    }
+    if (safeUpdates.title !== undefined && !safeUpdates.title.trim()) {
+      return res.status(400).json({ success: false, message: 'Title cannot be empty' });
+    }
+
+    const VALID_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
+    if (safeUpdates.priority && !VALID_PRIORITIES.includes(safeUpdates.priority)) {
+      return res.status(400).json({ success: false, message: `Invalid priority. Must be one of: ${VALID_PRIORITIES.join(', ')}` });
+    }
+
+    const VALID_STATUSES = ['Draft', 'Under Review', 'Approved', 'Rejected', 'Archived'];
+    if (safeUpdates.status && !VALID_STATUSES.includes(safeUpdates.status)) {
+      return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
+
     const { data, error } = await supabase
       .from('requirements')
-      .update(updates)
+      .update(safeUpdates)
       .eq('id', id)
       .select()
       .single();

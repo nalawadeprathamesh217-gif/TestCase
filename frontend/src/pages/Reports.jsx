@@ -40,7 +40,13 @@ export default function Reports() {
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-slate-800">Reports</h1>
-          <p className="text-slate-500 text-sm mt-1">Download simple, factual CSV exports of your testing data.</p>
+          <p className="text-slate-500 text-sm mt-1">Generate test execution, coverage, and AI generation reports.</p>
+        </div>
+
+        {/* Info */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-800">
+          <p className="font-semibold mb-2">How to use reports:</p>
+          <p>Export your testing data as CSV files to share with your team, present to stakeholders, or analyze in Excel.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

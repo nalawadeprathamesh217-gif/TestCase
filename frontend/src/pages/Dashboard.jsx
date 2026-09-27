@@ -53,9 +53,18 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-slate-800 mb-4">Welcome to AI Test Manager</h1>
           <p className="text-slate-500 text-lg mb-8 max-w-xl mx-auto">Your QA analytics will appear here once you start adding requirements, test cases, and execution results.</p>
           <div className="flex justify-center gap-4">
-            <button onClick={() => navigate('/requirements/new')} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-700">Create Requirement</button>
-            <button onClick={() => navigate('/test-cases/new')} className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-lg font-medium hover:bg-slate-200">Create Test Case</button>
-            <button onClick={() => navigate('/imports')} className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-lg font-medium hover:bg-slate-200">Import Data</button>
+            <div className="flex flex-col items-center">
+              <button onClick={() => navigate('/requirements/new')} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-700 w-48 mb-2">Create Requirement</button>
+              <span className="text-xs text-slate-500 max-w-[200px]">Define something your software needs to do.</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <button onClick={() => navigate('/test-cases/new')} className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-lg font-medium hover:bg-slate-200 w-48 mb-2">Create Test Case</button>
+              <span className="text-xs text-slate-500 max-w-[200px]">Create a step-by-step test to verify a requirement.</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <button onClick={() => navigate('/imports')} className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-lg font-medium hover:bg-slate-200 w-48 mb-2">Import Data</button>
+              <span className="text-xs text-slate-500 max-w-[200px]">Bring existing test cases from Excel or CSV files.</span>
+            </div>
           </div>
         </div>
       </AppLayout>
@@ -90,14 +99,37 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-end justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">QA Dashboard</h1>
-            <p className="text-slate-500 text-sm mt-1">High-level view of your testing progress and quality.</p>
+            <h1 className="text-2xl font-bold text-slate-800">AI Test Manager</h1>
+            <p className="text-slate-500 text-sm mt-1">Manage requirements, create and review test cases, run tests, and use AI to improve your testing process.</p>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs text-slate-400">Last updated: {lastUpdated.toLocaleTimeString()}</span>
             <button onClick={fetchDashboard} disabled={refreshing} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
             </button>
+          </div>
+        </div>
+
+        {/* Onboarding / Help Section */}
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 mb-6">
+          <h2 className="text-sm font-semibold text-blue-800 mb-3">How does AI Test Manager work?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="font-medium text-blue-900 block mb-1">1. Requirements</span>
+              <span className="text-blue-700">Describe what your software should do.</span>
+            </div>
+            <div>
+              <span className="font-medium text-blue-900 block mb-1">2. Test Cases</span>
+              <span className="text-blue-700">Describe how you will verify that the software works correctly.</span>
+            </div>
+            <div>
+              <span className="font-medium text-blue-900 block mb-1">3. AI & Review</span>
+              <span className="text-blue-700">Use AI to generate and review test cases.</span>
+            </div>
+            <div>
+              <span className="font-medium text-blue-900 block mb-1">4. Execution</span>
+              <span className="text-blue-700">Run your test cases and record the result.</span>
+            </div>
           </div>
         </div>
 

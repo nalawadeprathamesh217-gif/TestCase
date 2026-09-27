@@ -41,7 +41,7 @@ exports.evaluateQuality = async (req, res) => {
     const { data: requirement } = await supabase
       .from('requirements')
       .select('*')
-      .eq('requirement_id', testCase.requirement_id)
+      .eq('id', testCase.requirement_id)
       .single();
 
     if (!requirement) {
@@ -51,7 +51,24 @@ exports.evaluateQuality = async (req, res) => {
     // 3. Real AI Quality Evaluation
     let aiEvaluation;
     try {
-      const ruleFindings = "Basic rules passed: Title exists, steps exist, expected result exists.";
+      const missing = [];
+      if (!testCase.title) missing.push('Title');
+      if (!testCase.description) missing.push('Description');
+      if (!testCase.preconditions) missing.push('Preconditions');
+      if (!testCase.test_steps || testCase.test_steps === '[]') missing.push('Test Steps');
+      if (!testCase.expected_result) missing.push('Expected Result');
+      if (!testCase.test_type) missing.push('Test Type');
+      if (!testCase.priority) missing.push('Priority');
+      if (!testCase.risk) missing.push('Risk');
+
+      let ruleFindings = missing.length > 0
+        ? `Missing critical fields: ${missing.join(', ')}.`
+        : 'All required fields are present.';
+        
+      if (testCase.test_steps && testCase.test_steps.length < 20) {
+        ruleFindings += ' Warning: Test steps might be too vague or short.';
+      }
+
       aiEvaluation = await aiProvider.evaluateQuality(requirement, testCase, ruleFindings);
       
       if (!aiEvaluation || typeof aiEvaluation.overallScore !== 'number') {
@@ -82,6 +99,10 @@ exports.evaluateQuality = async (req, res) => {
       .single();
 
     if (insertError) throw insertError;
+
+    // Reset the quality_stale flag since it's freshly evaluated
+    await supabase.from('test_cases').update({ quality_stale: false }).eq('id', testCaseId);
+
 
     res.status(200).json({ success: true, data: result });
   } catch (error) {
