@@ -1,0 +1,11 @@
+Title,Description,Test Steps,Expected Result,Priority,Test Type,Requirement ID,Test Case ID
+Valid Login,Test successful login,1. Enter valid user and pass. 2. Click login,User is redirected to dashboard.,High,Functional,REQ-001,
+Missing Title,,1. Do something,Expect something,Medium,Functional,REQ-002,
+Invalid Priority,Test priority,1. Test,Expect,Urgent,Functional,REQ-001,
+Semantic Duplicate 1,Test login,1. Input correct credentials,System logs in successfully,High,Functional,REQ-001,
+Semantic Duplicate 2,Test login with right creds,1. Type email and password,Dashboard opens,High,Functional,REQ-001,
+Missing Req ID,No requirement,1. Step,Expected,Medium,Other,,
+Exact Duplicate 1,Test exact,1. Step,Expected,Low,Functional,REQ-002,TC-DUP-001
+Exact Duplicate 2,Test exact,1. Step,Expected,Low,Functional,REQ-002,TC-DUP-001
+Missing Steps,No steps,,Expected,Medium,Functional,REQ-001,
+Valid Test 2,Test another feature,1. Click feature,Feature works,Medium,Validation,REQ-002,

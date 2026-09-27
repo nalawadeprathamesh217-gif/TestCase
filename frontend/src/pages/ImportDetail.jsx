@@ -12,6 +12,9 @@ export default function ImportDetail() {
   const [step, setStep] = useState(1);
   const [working, setWorking] = useState(false);
   const [mappings, setMappings] = useState([]);
+  const [validationData, setValidationData] = useState({ valid: 0, invalid: 0, warnings: 0, total: 0 });
+  const [importResultData, setImportResultData] = useState({ imported: 0, failed: 0 });
+  const [previewRows, setPreviewRows] = useState([]);
 
   const fetchImport = async () => {
     try {
@@ -19,7 +22,6 @@ export default function ImportDetail() {
       setImportData(res.data.data);
       if (res.data.data.status === 'completed') setStep(4);
       
-      // If we are just starting, run analysis
       if (res.data.data.status === 'uploaded') {
         const analyzeRes = await api.post(`/test-case-imports/${id}/analyze`);
         setMappings(analyzeRes.data.data.mappings);
@@ -33,13 +35,41 @@ export default function ImportDetail() {
 
   useEffect(() => { fetchImport(); }, [id]);
 
+  const updateMapping = (idx, target) => {
+    const newMappings = [...mappings];
+    newMappings[idx].target = target;
+    setMappings(newMappings);
+  };
+
   const handleNextStep = async () => {
     setWorking(true);
     try {
-      // Step 1 -> 2: save mapping, then validate
-      if (step === 1) await api.post(`/test-case-imports/${id}/validate`);
-      if (step === 2) await api.post(`/test-case-imports/${id}/import`);
-      setStep(s => s + 1);
+      if (step === 1) {
+        // Save mappings
+        await api.post(`/test-case-imports/${id}/mapping`, { mappings });
+        
+        // Validate rows
+        const valRes = await api.post(`/test-case-imports/${id}/validate`);
+        
+        // Get Preview
+        const previewRes = await api.get(`/test-case-imports/${id}/preview`);
+        setPreviewRows(previewRes.data.data || []);
+        
+        setValidationData({
+          valid: valRes.data.data.valid,
+          invalid: valRes.data.data.invalid,
+          warnings: valRes.data.data.warnings,
+          total: valRes.data.data.valid + valRes.data.data.invalid
+        });
+        
+        setStep(3); // Skip step 2 (loading state) since we did it inline
+      } else if (step === 3) {
+        // Import
+        await api.post(`/test-case-imports/${id}/duplicates`); // Process duplicates (optional if handled in import, but we'll call it to set status)
+        const impRes = await api.post(`/test-case-imports/${id}/import`);
+        setImportResultData(impRes.data.data);
+        setStep(4);
+      }
     } catch (err) {
       alert(err.response?.data?.message || 'Action failed');
     } finally {
@@ -97,15 +127,20 @@ export default function ImportDetail() {
                       <td className="py-3 px-4 font-medium text-slate-800">{m.source}</td>
                       <td className="py-3 px-4 text-slate-500 italic">"{m.sample}"</td>
                       <td className="py-3 px-4">
-                        <select className="border border-slate-300 rounded-md px-3 py-1.5 text-sm w-full outline-none focus:border-blue-500 bg-white" defaultValue={m.target}>
-                          <option>Test Case ID</option>
-                          <option>Title</option>
-                          <option>Description</option>
-                          <option>Test Steps</option>
-                          <option>Expected Result</option>
-                          <option>Priority</option>
-                          <option>Test Type</option>
-                          <option>Ignore</option>
+                        <select 
+                          className="border border-slate-300 rounded-md px-3 py-1.5 text-sm w-full outline-none focus:border-blue-500 bg-white" 
+                          value={m.target}
+                          onChange={(e) => updateMapping(i, e.target.value)}
+                        >
+                          <option value="Test Case ID">Test Case ID</option>
+                          <option value="Requirement ID">Requirement ID</option>
+                          <option value="Title">Title</option>
+                          <option value="Description">Description</option>
+                          <option value="Test Steps">Test Steps</option>
+                          <option value="Expected Result">Expected Result</option>
+                          <option value="Priority">Priority</option>
+                          <option value="Test Type">Test Type</option>
+                          <option value="Ignore">Ignore</option>
                         </select>
                       </td>
                       <td className="py-3 px-4 text-center">
@@ -131,15 +166,48 @@ export default function ImportDetail() {
               <h3 className="text-lg font-semibold text-slate-800 mb-2">Import Preview</h3>
               <div className="flex gap-4 mb-6">
                 <div className="bg-slate-50 p-4 rounded-lg flex-1 border border-slate-200">
-                  <div className="text-2xl font-bold text-slate-800">10</div><div className="text-sm text-slate-500">Total Rows</div>
+                  <div className="text-2xl font-bold text-slate-800">{validationData.total}</div><div className="text-sm text-slate-500">Total Rows</div>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg flex-1 border border-green-200">
-                  <div className="text-2xl font-bold text-green-700">10</div><div className="text-sm text-green-600">Valid</div>
+                  <div className="text-2xl font-bold text-green-700">{validationData.valid}</div><div className="text-sm text-green-600">Valid</div>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg flex-1 border border-red-200">
-                  <div className="text-2xl font-bold text-red-700">0</div><div className="text-sm text-red-600">Invalid</div>
+                  <div className="text-2xl font-bold text-red-700">{validationData.invalid}</div><div className="text-sm text-red-600">Invalid</div>
                 </div>
               </div>
+
+              {previewRows.length > 0 && (
+                <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-slate-700 border-b border-slate-200">
+                      <tr>
+                        <th className="py-2 px-3">Row</th>
+                        <th className="py-2 px-3">Status</th>
+                        <th className="py-2 px-3">Title</th>
+                        <th className="py-2 px-3">Errors</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {previewRows.map((row) => (
+                        <tr key={row.id}>
+                          <td className="py-2 px-3 text-slate-500">{row.row_number}</td>
+                          <td className="py-2 px-3">
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${row.validation_status === 'valid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {row.validation_status}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 font-medium text-slate-800">{row.mapped_data?.Title || '-'}</td>
+                          <td className="py-2 px-3 text-red-600 text-xs">
+                            {row.validation_errors?.map((err, idx) => (
+                              <div key={idx}>{err.message}</div>
+                            ))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
@@ -149,7 +217,10 @@ export default function ImportDetail() {
                 <CheckCircle2 className="w-10 h-10 text-green-600" />
               </div>
               <h3 className="text-2xl font-bold text-slate-800 mb-2">Import Complete!</h3>
-              <p className="text-slate-500 mb-6">Successfully imported 10 test cases from {importData.file_name}.</p>
+              <p className="text-slate-500 mb-6">Successfully imported {importResultData.imported} test cases from {importData.file_name}.</p>
+              {importResultData.failed > 0 && (
+                <p className="text-red-500 mb-6">{importResultData.failed} records failed to import.</p>
+              )}
               <div className="flex gap-3">
                 <button onClick={() => navigate('/test-cases')} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">View Test Cases</button>
                 <button onClick={() => navigate('/imports')} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50">Back to Imports</button>
@@ -163,7 +234,7 @@ export default function ImportDetail() {
               <button className="text-sm font-medium text-slate-500 hover:text-slate-700">Cancel</button>
               <button 
                 onClick={handleNextStep} 
-                disabled={working}
+                disabled={working || (step === 3 && validationData.valid === 0)}
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {working ? 'Processing...' : step === 3 ? 'Import Valid Records' : 'Continue'}

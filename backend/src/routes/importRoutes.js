@@ -18,11 +18,10 @@ router.post('/', upload.single('file'), importController.uploadFile);
 router.get('/', importController.listImports);
 router.get('/:id', importController.getImport);
 router.post('/:id/analyze', importController.analyzeFile);
-router.get('/:id/mapping', importController.getMapping);
-router.put('/:id/mapping', importController.saveMapping);
+router.post('/:id/mapping', importController.saveMapping);
 router.post('/:id/validate', importController.validateRows);
-router.get('/:id/rows', importController.getPreviewRows);
-router.post('/:id/check-duplicates', importController.checkDuplicates);
+router.get('/:id/preview', importController.getPreviewRows);
+router.post('/:id/duplicates', importController.checkDuplicates);
 router.post('/:id/import', importController.performImport);
 
 module.exports = router;
