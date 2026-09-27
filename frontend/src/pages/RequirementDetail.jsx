@@ -43,7 +43,6 @@ export default function RequirementDetail() {
         <div className="flex items-center gap-3 mb-6">
           <button onClick={() => navigate('/requirements')} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><ArrowLeft className="w-4 h-4" /></button>
           <div>
-          <div>
             <h1 className="text-2xl font-bold text-slate-800">Requirement Details</h1>
             <p className="text-slate-500 text-sm mt-1">Review the requirement and its source before creating test cases.</p>
           </div>
