@@ -23,6 +23,7 @@ app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/defects', require('./routes/defectRoutes'));
+app.use('/api/ai/providers', require('./routes/aiProviderRoutes'));
 
 // Basic health check
 app.get('/api/health', (req, res) => {

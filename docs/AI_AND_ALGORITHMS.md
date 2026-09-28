@@ -71,7 +71,19 @@ If the AI provider is down or returns invalid JSON, the system degrades graceful
 ## 18. Complete Data Flow
 Requirement (Text) -> AI LLM -> Test Case Candidate (JSON) -> Human Approval -> Test Case (DB) -> Embedding Model -> Vector (pgvector) -> Cosine Similarity -> Duplicate Analysis.
 
-## 19. Algorithms vs AI Models
+## 19. Core Terminology Definitions
+
+To ensure clarity, the following definitions govern this architecture:
+
+- **Gemini / Fallback Provider**: The primary and fallback Artificial Intelligence / Large Language Model (AI/LLM) used for text generation, evaluation, and explanation.
+- **SHA-256**: The cryptographic algorithm used for exact duplicate detection.
+- **Embedding**: A numerical vector representing the semantic representation (meaning) of a text.
+- **Cosine Similarity**: The mathematical similarity calculation used to compare embeddings.
+- **pgvector**: The PostgreSQL extension used for vector storage and semantic search.
+- **Rule-based Checks**: Deterministic logic (e.g., checking if fields are empty) used before or after AI processes.
+- **Weighted Scoring**: The deterministic quality calculation based on mathematical weighting, distinct from AI generation.
+
+## 20. Algorithms vs AI Models
 
 | Feature | Technique | AI? |
 |---|---|---|
@@ -87,5 +99,5 @@ Requirement (Text) -> AI LLM -> Test Case Candidate (JSON) -> Human Approval -> 
 | Duplicate classification | LLM | Yes |
 | Defect analysis | LLM | Yes |
 
-## 20. Interview/Viva Explanation
+## 21. Interview/Viva Explanation
 This architecture proves that AI can be safely integrated into enterprise software by combining non-deterministic LLMs with strict deterministic validation, embedding-based semantic search, and mandatory human oversight.

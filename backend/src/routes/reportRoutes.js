@@ -6,5 +6,7 @@ const { requireAuth } = require('../middleware/authMiddleware');
 router.use(requireAuth);
 
 router.get('/qa-summary', reportController.getQaSummary);
+router.get('/execution', reportController.getExecutionReport);
+router.get('/quality', reportController.getTestQualityReport);
 
 module.exports = router;

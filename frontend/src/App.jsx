@@ -30,10 +30,12 @@ import Defects from './pages/Defects';
 import CreateDefect from './pages/CreateDefect';
 import DefectDetail from './pages/DefectDetail';
 
+import ErrorBoundary from './components/ErrorBoundary';
+
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  return children;
+  return <ErrorBoundary>{children}</ErrorBoundary>;
 };
 
 function App() {

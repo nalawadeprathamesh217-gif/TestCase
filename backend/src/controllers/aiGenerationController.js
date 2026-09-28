@@ -1,7 +1,7 @@
 const supabase = require('../config/supabase');
 const { v4: uuidv4 } = require('uuid');
-const aiProvider = require('../services/ai/GeminiProvider');
-const { retryWithBackoff } = require('../utils/retryHelper');
+const aiProviderManager = require('../services/ai/AIProviderManager');
+const { retryWithBackoff } = require('../utils/retryHelper'); // Kept for other uses if needed
 
 // [AI-GENERATION]
 // ============================================================
@@ -72,68 +72,40 @@ exports.generateTestCases = async (req, res) => {
         id: runId,
         requirement_id: requirementId,
         requested_by: req.user.id,
-        ai_provider: process.env.AI_PROVIDER || 'gemini',
-        ai_model: process.env.AI_MODEL || 'gemini-1.5-pro',
-        requested_count: count || 10,
-        status: 'processing'
+        status: 'processing',
+        requested_count: count || 10
       }])
       .select()
       .single();
 
     if (runError) throw runError;
 
-    // 3. Initiate the AI Request
-    //
-    // HUMAN-IN-THE-LOOP
-    //
-    // AI provides a suggestion.
-    // A human must review the result before it becomes
-    // an approved/final record.
-    //
-    // This prevents automatic AI decisions from becoming
-    // authoritative application data.
-    
     let generatedCases;
-    let finalAttemptCount = 1;
-    let fallbackUsed = false;
-
+    let metadata;
+    
     try {
-      console.log(`[AI] Gemini generation started for requirement ${requirementId}`);
+      console.log(`[AI] Generation started for requirement ${requirementId}`);
       
-      const aiResponse = await retryWithBackoff(async (attempt) => {
-        finalAttemptCount = attempt;
-        console.log(`[AI] Attempt ${attempt}/3`);
-        
-        // Update run attempt_count
-        await supabase
-          .from('test_case_generation_runs')
-          .update({ attempt_count: attempt, status: 'processing' })
-          .eq('id', runId);
+      const resultObj = await aiProviderManager.generateTestCases(requirement, count || 10);
+      generatedCases = resultObj.result.testCases;
+      metadata = resultObj.metadata;
 
-        return await aiProvider.generateTestCases(requirement, count || 10);
-      }, {
-        maxAttempts: 3,
-        baseDelayMs: 2000,
-        onRetry: async (error, attempt, delay) => {
-          const status = error.status || error.statusCode || 500;
-          console.log(`[AI] Gemini returned ${status}: ${error.message}`);
-          console.log(`[AI] Temporary error. Retrying in approximately ${Math.round(delay / 1000)} seconds`);
-        }
-      });
-      
-      if (!aiResponse || !aiResponse.testCases || !Array.isArray(aiResponse.testCases)) {
-        throw new Error('Malformed AI response from provider.');
-      }
-      
-      console.log('[AI] Gemini generation successful');
+      // Update run metadata
+      await supabase
+        .from('test_case_generation_runs')
+        .update({ 
+          status: 'processing',
+          ai_provider: metadata.final_provider,
+          ai_model: metadata.final_model,
+          fallback_used: metadata.fallback_level > 0,
+          attempt_count: metadata.attempted_providers.length,
+          failure_reason: Object.keys(metadata.provider_status).length > 1 ? JSON.stringify(metadata.provider_status) : null
+        })
+        .eq('id', runId);
+
       console.log('[AI] Generation completed');
-      generatedCases = aiResponse.testCases;
     } catch (aiErr) {
-      if (finalAttemptCount >= 3) {
-        console.log(`[AI] Gemini still unavailable`);
-        console.log(`[AI] Generation failed after 3 attempts`);
-      }
-      console.error('Gemini API error:', aiErr.message);
+      console.error('AI API error:', aiErr.message);
       
       // Update run status to failed
       await supabase
@@ -141,29 +113,31 @@ exports.generateTestCases = async (req, res) => {
         .update({ 
           status: 'failed', 
           error_message: aiErr.message,
-          attempt_count: finalAttemptCount,
-          failure_reason: 'Gemini API Error'
+          failure_reason: aiErr.metadata ? JSON.stringify({
+            code: aiErr.code || 'AI_API_ERROR',
+            status: aiErr.metadata.provider_status
+          }) : (aiErr.code || 'AI_API_ERROR'),
+          ai_provider: aiErr.metadata?.primary_provider,
+          attempt_count: aiErr.metadata?.attempted_providers?.length || 1
         })
         .eq('id', runId);
-      
-      const status = aiErr.status || aiErr.statusCode || 500;
-      const isRetryable = status === 408 || status === 429 || status >= 500 || aiErr.message.toLowerCase().includes('timeout');
 
-      if (isRetryable) {
-        return res.status(503).json({ 
-          success: false, 
-          message: 'AI generation is temporarily unavailable because the AI service is busy. Please try again in a few moments.',
-          retryable: true
-        });
-      } else {
-        return res.status(500).json({ 
-          success: false, 
-          message: 'AI service configuration is invalid or failed. ' + aiErr.message,
+      if (aiErr.code === 'ALL_AI_PROVIDERS_FAILED') {
+        return res.status(503).json({
+          success: false,
+          code: 'ALL_AI_PROVIDERS_FAILED',
+          message: aiErr.message,
           retryable: false
         });
       }
-    }
 
+      return res.status(500).json({ 
+        success: false, 
+        message: 'AI generation is currently unavailable. Please try again later.',
+        retryable: false,
+        code: aiErr.code || 'AI_GENERATION_FAILED'
+      });
+    }
     //
     // ============================================================
     // AI OUTPUT VALIDATION
@@ -174,11 +148,27 @@ exports.generateTestCases = async (req, res) => {
     // incomplete or unexpected data.
     // Therefore we validate the required fields, data types, etc.
     
+    const safeParseArray = (value) => {
+      if (!value) return [];
+      if (Array.isArray(value)) return value;
+      
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) return parsed;
+        } catch (e) {}
+        
+        const lines = value.split(/\r?\n/)
+          .map(line => line.replace(/^(\d+\.|\*|-|•)\s*/, '').trim())
+          .filter(line => line.length > 0);
+          
+        if (lines.length > 0) return lines;
+        return [value.trim()];
+      }
+      return [];
+    };
+
     const candidates = generatedCases.map(tc => {
-      // Ensure arrays are stringified or handled if required, but Supabase accepts JS arrays into JSONB.
-      // However, if the columns are TEXT, arrays might cause issues. 
-      // We will stringify arrays just in case, but if Supabase handles them, it's fine.
-      // Wait, let's keep it as is, but ensure we pass requirement_id and no 'status' column.
       return {
         id: uuidv4(),
         generation_run_id: runId,
@@ -186,8 +176,8 @@ exports.generateTestCases = async (req, res) => {
         temporary_id: `TC-AI-${Math.floor(Math.random() * 10000)}`,
         title: tc.title || 'Untitled Test Case',
         description: tc.description || '',
-        preconditions: tc.preconditions || '',
-        test_steps: tc.testSteps || tc.test_steps || '',
+        preconditions: safeParseArray(tc.preconditions),
+        test_steps: safeParseArray(tc.testSteps || tc.test_steps),
         expected_result: tc.expectedResult || tc.expected_result || '',
         test_type: tc.testType || tc.test_type || 'Functional',
         priority: tc.priority || 'Medium',
@@ -221,7 +211,24 @@ exports.generateTestCases = async (req, res) => {
     res.status(200).json({ 
       success: true, 
       message: 'AI generation completed',
-      data: { generationRunId: runId, candidates }
+      data: { 
+        generationRunId: runId, 
+        candidates: candidates.map(c => ({
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          preconditions: c.preconditions,
+          testSteps: c.test_steps,
+          expectedResult: c.expected_result,
+          testType: c.test_type,
+          priority: c.priority,
+          risk: c.risk,
+          reviewStatus: c.review_status
+        })),
+        fallbackUsed: metadata?.fallback_used || metadata?.fallback_level > 0,
+        finalProvider: metadata?.final_provider,
+        attemptedProviders: metadata?.attempted_providers 
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -282,6 +289,13 @@ exports.acceptCandidate = async (req, res) => {
     const finalTcId = `TC-${nextNum.toString().padStart(3, '0')}`;
 
     // 3. Insert into test_cases
+    const safeStringify = (val) => {
+      if (!val) return '';
+      if (typeof val === 'string') return val;
+      if (Array.isArray(val)) return JSON.stringify(val);
+      return String(val);
+    };
+
     const { data: newTc, error: tcError } = await supabase
       .from('test_cases')
       .insert([{
@@ -289,8 +303,8 @@ exports.acceptCandidate = async (req, res) => {
         requirement_id: requirementId,
         title: candidate.title,
         description: candidate.description,
-        preconditions: candidate.preconditions,
-        test_steps: candidate.test_steps,
+        preconditions: safeStringify(candidate.preconditions),
+        test_steps: safeStringify(candidate.test_steps),
         expected_result: candidate.expected_result,
         test_type: candidate.test_type || 'Functional',
         priority: candidate.priority || 'Medium',
@@ -312,5 +326,51 @@ exports.acceptCandidate = async (req, res) => {
     res.json({ success: true, message: 'Test case accepted successfully', data: newTc });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.updateCandidate = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    const {
+      title, description, preconditions, testSteps, expectedResult, testType, priority, risk
+    } = req.body;
+
+    const { data: candidate, error: updateError } = await supabase
+      .from('test_case_generation_candidates')
+      .update({
+        title,
+        description,
+        preconditions,
+        test_steps: testSteps,
+        expected_result: expectedResult,
+        test_type: testType,
+        priority,
+        risk,
+        review_status: 'Edited'
+      })
+      .eq('id', candidateId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+    
+    res.json({
+      success: true,
+      data: {
+        id: candidate.id,
+        title: candidate.title,
+        description: candidate.description,
+        preconditions: candidate.preconditions,
+        testSteps: candidate.test_steps,
+        expectedResult: candidate.expected_result,
+        testType: candidate.test_type,
+        priority: candidate.priority,
+        risk: candidate.risk,
+        reviewStatus: candidate.review_status
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };

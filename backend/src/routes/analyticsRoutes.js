@@ -10,5 +10,6 @@ router.get('/execution', analyticsController.getExecution);
 router.get('/quality', analyticsController.getQuality);
 router.get('/requirements', analyticsController.getRequirements);
 router.get('/duplicates', analyticsController.getDuplicates);
+router.get('/ai', analyticsController.getAi);
 
 module.exports = router;

@@ -146,7 +146,7 @@ exports.getRequirements = async (req, res) => {
 
 exports.getDuplicates = async (req, res) => {
   try {
-    const { data, error } = await supabase.from('test_case_duplicates').select('status, similarity_score');
+    const { data, error } = await supabase.from('test_case_duplicates').select('review_status, similarity_score');
     if (error) throw error;
     
     const byStatus = { pending: 0, confirmed: 0, not_duplicate: 0, dismissed: 0 };
@@ -154,12 +154,47 @@ exports.getDuplicates = async (req, res) => {
     let semantic = 0;
     
     data.forEach(d => {
-      if (byStatus[d.status] !== undefined) byStatus[d.status]++;
+      const st = d.review_status || 'pending';
+      if (byStatus[st] !== undefined) byStatus[st]++;
       if (d.similarity_score > 0.98) exact++;
       else semantic++;
     });
 
     res.json({ success: true, data: { byStatus, types: { exact, semantic }, total: data.length } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getAi = async (req, res) => {
+  try {
+    const [runsRes, candsRes] = await Promise.all([
+      supabase.from('test_case_generation_runs').select('id, ai_provider, status, requested_count'),
+      supabase.from('test_case_generation_candidates').select('id, review_status')
+    ]);
+    
+    if (runsRes.error) throw runsRes.error;
+    if (candsRes.error) throw candsRes.error;
+    
+    const runs = runsRes.data || [];
+    const candidates = candsRes.data || [];
+    
+    const overview = {
+      runs: runs.length,
+      candidates: candidates.length,
+      accepted: candidates.filter(c => c.review_status === 'Accepted').length,
+      rejected: candidates.filter(c => c.review_status === 'Rejected').length,
+      edited: candidates.filter(c => c.review_status === 'Edited').length
+    };
+    
+    const providers = {};
+    runs.forEach(r => {
+      const p = r.ai_provider || 'Unknown';
+      if (!providers[p]) providers[p] = 0;
+      providers[p]++;
+    });
+
+    res.json({ success: true, data: { overview, providers } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

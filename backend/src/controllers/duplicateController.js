@@ -1,5 +1,5 @@
 const supabase = require('../config/supabase');
-const aiProvider = require('../services/ai/GeminiProvider');
+const aiProviderManager = require('../services/ai/AIProviderManager');
 
 // [AI-DUPLICATE]
 // [ALGO-EMBEDDING]
@@ -34,7 +34,7 @@ exports.findDuplicates = async (req, res) => {
     // to get a vector representation of the title + description.
     let duplicates = [];
     try {
-      const embedding = await aiProvider.createEmbedding(`${title} ${description}`);
+      const { result: embedding } = await aiProviderManager.createEmbedding(`${title} ${description}`);
       
       // ============================================================
       // VECTOR SEARCH: POSTGRESQL + PGVECTOR & COSINE SIMILARITY

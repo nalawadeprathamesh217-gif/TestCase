@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import AppLayout from '../layouts/AppLayout';
 import { TestTube, Search, ChevronRight, CheckCircle, XCircle, AlertTriangle, Clock } from 'lucide-react';
+import { normalizeListField } from '../utils/testCaseFormatters';
 
 const statusColors = {
   'Passed': 'bg-green-100 text-green-700 border-green-200',
@@ -29,7 +30,7 @@ export default function TestExecution() {
 
   // Execution modal state
   const [selected, setSelected] = useState(null);
-  const [execForm, setExecForm] = useState({ execution_result: 'Passed', actual_result: '', comments: '', environment: '', browser: '' });
+  const [execForm, setExecForm] = useState({ execution_result: '', actual_result: '', comments: '', environment: '', browser: '' });
   const [executing, setExecuting] = useState(false);
   const [executions, setExecutions] = useState([]);
   const [loadingExec, setLoadingExec] = useState(false);
@@ -72,7 +73,7 @@ export default function TestExecution() {
 
   const handleSelect = (tc) => {
     setSelected(tc);
-    setExecForm({ execution_result: 'Passed', actual_result: '', comments: '', environment: '', browser: '' });
+    setExecForm({ execution_result: '', actual_result: '', comments: '', environment: '', browser: '' });
     fetchExecutions(tc.id);
   };
 
@@ -82,7 +83,7 @@ export default function TestExecution() {
     setExecuting(true);
     try {
       await api.post(`/test-cases/${selected.id}/executions`, execForm);
-      setExecForm({ execution_result: 'Passed', actual_result: '', comments: '', environment: '', browser: '' });
+      setExecForm({ execution_result: '', actual_result: '', comments: '', environment: '', browser: '' });
       fetchExecutions(selected.id);
       fetchTestCases();
     } catch (err) {
@@ -217,17 +218,33 @@ export default function TestExecution() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Preconditions</p>
-                      <p className="text-slate-700 whitespace-pre-wrap">{selected.preconditions || 'None'}</p>
+                      {(() => {
+                        const preconds = normalizeListField(selected.preconditions);
+                        if (preconds.length === 0) return <p className="text-sm text-slate-700 italic">No preconditions specified.</p>;
+                        return (
+                          <ol className="text-sm text-slate-700 space-y-1 list-decimal pl-4">
+                            {preconds.map((p, i) => <li key={i}>{p}</li>)}
+                          </ol>
+                        );
+                      })()}
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Expected Result</p>
-                      <p className="text-slate-700 whitespace-pre-wrap">{selected.expected_result || 'Not specified'}</p>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{selected.expected_result || 'Not specified'}</p>
                     </div>
                   </div>
 
                   <div className="mt-4">
                     <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Test Steps</p>
-                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{selected.test_steps || 'No steps defined'}</p>
+                    {(() => {
+                      const steps = normalizeListField(selected.test_steps);
+                      if (steps.length === 0) return <p className="text-sm text-slate-700 italic">No test steps provided.</p>;
+                      return (
+                        <ol className="text-sm text-slate-700 space-y-2 list-decimal pl-4">
+                          {steps.map((step, i) => <li key={i}>{step}</li>)}
+                        </ol>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -242,7 +259,9 @@ export default function TestExecution() {
                           value={execForm.execution_result}
                           onChange={(e) => setExecForm({...execForm, execution_result: e.target.value})}
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
                         >
+                          <option value="">Select result...</option>
                           <option value="Passed">Passed</option>
                           <option value="Failed">Failed</option>
                           <option value="Blocked">Blocked</option>
@@ -285,6 +304,7 @@ export default function TestExecution() {
                         rows={3}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                         placeholder="Describe the actual result observed..."
+                        required
                       />
                     </div>
 

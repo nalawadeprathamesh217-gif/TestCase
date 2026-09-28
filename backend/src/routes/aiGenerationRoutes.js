@@ -8,5 +8,6 @@ router.use(requireAuth);
 router.post('/:id/generate-test-cases', requireRole(['admin', 'tester', 'test_manager']), aiGenerationController.generateTestCases);
 router.get('/:id/generation-history', aiGenerationController.getGenerationHistory);
 router.post('/candidates/:candidateId/accept', requireRole(['admin', 'tester', 'test_manager']), aiGenerationController.acceptCandidate);
+router.put('/candidates/:candidateId', requireRole(['admin', 'tester', 'test_manager']), aiGenerationController.updateCandidate);
 
 module.exports = router;

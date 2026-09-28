@@ -4,6 +4,7 @@ import api from '../services/api';
 import AppLayout from '../layouts/AppLayout';
 import InfoTooltip from '../components/InfoTooltip';
 import { ArrowLeft, History, FileText, CheckCircle, Search, RefreshCw, AlertCircle, Clock, Sparkles } from 'lucide-react';
+import { normalizeListField } from '../utils/testCaseFormatters';
 
 const ExecBadge = ({ result }) => {
   const colors = { 'Passed': 'bg-green-100 text-green-700', 'Failed': 'bg-red-100 text-red-700', 'Blocked': 'bg-orange-100 text-orange-700', 'Not Executed': 'bg-slate-100 text-slate-500' };
@@ -22,7 +23,7 @@ export default function TestCaseDetail() {
   
   const [loading, setLoading] = useState(true);
   
-  const [execForm, setExecForm] = useState({ execution_result: 'Passed', actual_result: '', comments: '', environment: '', browser: '' });
+  const [execForm, setExecForm] = useState({ execution_result: '', actual_result: '', comments: '', environment: '', browser: '' });
   const [executing, setExecuting] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   
@@ -32,24 +33,9 @@ export default function TestCaseDetail() {
   const [loadingMsg, setLoadingMsg] = useState('AI is reviewing this test case...');
 
   useEffect(() => {
-    let interval;
     if (evaluating) {
-      const messages = [
-        'AI is reviewing this test case...',
-        'Checking completeness...',
-        'Checking clarity...',
-        'Checking relevance...',
-        'Checking consistency...'
-      ];
-      let i = 0;
-      interval = setInterval(() => {
-        i = (i + 1) % messages.length;
-        setLoadingMsg(messages[i]);
-      }, 2000);
-    } else {
-      setLoadingMsg('AI is reviewing this test case...');
+      setLoadingMsg('Evaluating completeness, clarity, relevance and consistency...');
     }
-    return () => clearInterval(interval);
   }, [evaluating]);
 
   const fetchData = async () => {
@@ -86,7 +72,7 @@ export default function TestCaseDetail() {
     setExecuting(true);
     try {
       await api.post(`/test-cases/${id}/executions`, execForm);
-      setExecForm({ execution_result: 'Passed', actual_result: '', comments: '', environment: '', browser: '' });
+      setExecForm({ execution_result: '', actual_result: '', comments: '', environment: '', browser: '' });
       fetchData();
     } catch (err) {
       alert(err.response?.data?.message || 'Execution failed');
@@ -98,7 +84,15 @@ export default function TestCaseDetail() {
   const handleEvaluate = async () => {
     setEvaluating(true);
     try {
-      await api.post(`/test-cases/${id}/quality/evaluate`);
+      const res = await api.post(`/test-cases/${id}/quality/evaluate`);
+      const newQuality = res.data.data;
+      if (newQuality.aiProvider === 'groq') {
+        alert('Gemini was temporarily unavailable. The test case was evaluated using Groq.');
+      } else if (newQuality.aiProvider === 'openrouter') {
+        alert('Gemini and Groq were unavailable. The test case was evaluated using OpenRouter.');
+      } else if (newQuality.aiProvider === 'mistral') {
+        alert('The test case was evaluated using Mistral after the previous AI providers were unavailable.');
+      }
       fetchData();
     } catch (err) {
       alert(err.response?.data?.message || 'Evaluation failed');
@@ -135,24 +129,7 @@ export default function TestCaseDetail() {
   if (loading) return <AppLayout><div className="text-center py-20 text-slate-400">Loading...</div></AppLayout>;
   if (!testCase) return <AppLayout><div className="text-center py-20 text-slate-500">Test case not found.</div></AppLayout>;
 
-  let steps = [];
-  if (testCase.test_steps) {
-    if (typeof testCase.test_steps === 'string') {
-      try {
-        const parsed = JSON.parse(testCase.test_steps);
-        if (Array.isArray(parsed)) {
-          steps = parsed;
-        } else {
-          steps = testCase.test_steps.split('\n');
-        }
-      } catch (e) {
-        steps = testCase.test_steps.split('\n');
-      }
-    } else if (Array.isArray(testCase.test_steps)) {
-      steps = testCase.test_steps;
-    }
-  }
-  steps = steps.filter(s => typeof s === 'string' && s.trim());
+  let steps = normalizeListField(testCase.test_steps);
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto">
@@ -208,20 +185,29 @@ export default function TestCaseDetail() {
                   <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{testCase.test_type}</span>
                   <ExecBadge result={testCase.execution_result} />
                 </div>
-                {[ 
-                  { label: 'Description', value: testCase.description },
-                  { label: 'Preconditions', value: testCase.preconditions, helper: 'What needs to be ready before you start this test.' },
-                ].map(f => (
-                  <div key={f.label} className="mb-6">
-                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">{f.label}</h3>
-                    {f.helper && <p className="text-xs text-slate-500 mb-2">{f.helper}</p>}
-                    {f.value ? (
-                      <p className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 p-4 rounded-xl border border-slate-100">{f.value}</p>
-                    ) : (
-                      <p className="text-sm text-slate-500 italic">No {f.label.toLowerCase()} provided.</p>
-                    )}
-                  </div>
-                ))}
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">Description</h3>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 p-4 rounded-xl border border-slate-100">{testCase.description || <span className="italic text-slate-400">No description provided.</span>}</p>
+                </div>
+                
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">Preconditions</h3>
+                  <p className="text-xs text-slate-500 mb-2">What needs to be ready before you start this test.</p>
+                  {(() => {
+                    const preconds = normalizeListField(testCase.preconditions);
+                    if (preconds.length === 0) {
+                      return <p className="text-sm text-slate-500 italic">No preconditions provided.</p>;
+                    }
+                    
+                    return (
+                      <ol className="text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-1 list-decimal pl-8">
+                        {preconds.map((p, i) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ol>
+                    );
+                  })()}
+                </div>
                 
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">Test Steps</h3>
@@ -293,15 +279,28 @@ export default function TestCaseDetail() {
                       <button onClick={() => setDiff(null)} className="text-sm text-slate-500 font-normal hover:text-slate-800">Clear</button>
                     </div>
                     <div className="p-4 space-y-4">
-                      {diff.length === 0 ? <p className="text-sm text-slate-500 text-center py-4">No changes detected between these versions.</p> : diff.map(d => (
-                        <div key={d.field} className="border border-slate-200 rounded p-3">
-                          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">{d.field.replace('_', ' ')}</h4>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div className="bg-red-50 text-red-900 p-2 rounded whitespace-pre-wrap"><span className="font-semibold text-red-700 block text-xs mb-1">v{compareVersions.from}</span>{d.old || '(empty)'}</div>
-                            <div className="bg-green-50 text-green-900 p-2 rounded whitespace-pre-wrap"><span className="font-semibold text-green-700 block text-xs mb-1">v{compareVersions.to}</span>{d.new || '(empty)'}</div>
+                      {diff.length === 0 ? <p className="text-sm text-slate-500 text-center py-4">No changes detected between these versions.</p> : diff.map(d => {
+                        const isList = d.field === 'preconditions' || d.field === 'test_steps';
+                        let oldVal = d.old || '(empty)';
+                        let newVal = d.new || '(empty)';
+                        
+                        if (isList) {
+                          const oldList = normalizeListField(d.old);
+                          const newList = normalizeListField(d.new);
+                          oldVal = oldList.length ? oldList.map((item, i) => `${i+1}. ${item}`).join('\n') : '(empty)';
+                          newVal = newList.length ? newList.map((item, i) => `${i+1}. ${item}`).join('\n') : '(empty)';
+                        }
+                        
+                        return (
+                          <div key={d.field} className="border border-slate-200 rounded p-3">
+                            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">{d.field.replace('_', ' ')}</h4>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div className="bg-red-50 text-red-900 p-2 rounded whitespace-pre-wrap"><span className="font-semibold text-red-700 block text-xs mb-1">v{compareVersions.from}</span>{oldVal}</div>
+                              <div className="bg-green-50 text-green-900 p-2 rounded whitespace-pre-wrap"><span className="font-semibold text-green-700 block text-xs mb-1">v{compareVersions.to}</span>{newVal}</div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -358,6 +357,28 @@ export default function TestCaseDetail() {
 
             {activeTab === 'Execution' && (
               <div className="space-y-6">
+                <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm mb-6">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">Execute Test Steps</h3>
+                  {steps.length > 0 ? (
+                    <div className="space-y-4">
+                      {steps.map((step, i) => (
+                        <div key={i} className="flex flex-col p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Step {i + 1}</span>
+                          <span className="text-sm text-slate-700 font-medium">{step.replace(/^\d+\.\s*/, '')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 italic p-4 bg-slate-50 rounded-xl border border-slate-100">No test steps provided.</p>
+                  )}
+                  {testCase.expected_result && (
+                    <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl">
+                      <span className="text-xs font-bold text-green-700 uppercase tracking-wider mb-1 block">Expected Result</span>
+                      <span className="text-sm text-green-900 font-medium">{testCase.expected_result}</span>
+                    </div>
+                  )}
+                </div>
+
                 <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
                   <h3 className="font-semibold text-slate-700 mb-1">Record Execution</h3>
                   <p className="text-sm text-slate-500 mb-6">Execute this test case and record what actually happened.</p>
@@ -454,107 +475,320 @@ export default function TestCaseDetail() {
               </div>
             )}
 
-            {activeTab === 'Quality' && (
-              <div className="bg-white rounded-xl border border-slate-200 p-8 shadow-sm">
-                <div className="mb-6 pb-6 border-b border-slate-100">
-                  <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-indigo-500" /> AI Quality Review
-                  </h3>
-                  <p className="text-sm text-slate-500">AI reviews your test case to find missing information and possible improvements.</p>
-                  
-                  <div className="mt-4 bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
-                    <p className="font-semibold mb-2">What does AI check?</p>
-                    <ul className="space-y-1">
-                      <li><span className="font-semibold">Completeness:</span> Does the test contain all important information?</li>
-                      <li><span className="font-semibold">Clarity:</span> Are the test steps and expected result easy to understand?</li>
-                      <li><span className="font-semibold">Relevance:</span> Does the test actually verify the requirement?</li>
-                      <li><span className="font-semibold">Consistency:</span> Do the different parts of the test case agree with each other?</li>
-                    </ul>
-                  </div>
-                </div>
-                
+            {activeTab === 'Quality' && (() => {
+              // --- Helper functions scoped inside Quality tab ---
+              const overallScore = quality?.overall ?? quality?.overall_score ?? null;
+              const getLabel = (s) => s >= 90 ? 'Excellent' : s >= 75 ? 'Good' : s >= 50 ? 'Needs Improvement' : 'Poor';
+              const getLabelColor = (s) => s >= 90 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : s >= 75 ? 'bg-blue-100 text-blue-700 border-blue-200' : s >= 50 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 border-red-200';
+              const getBarColor = (s) => s >= 90 ? 'bg-emerald-500' : s >= 75 ? 'bg-blue-500' : s >= 50 ? 'bg-amber-500' : 'bg-red-500';
+              const getScoreTextColor = (s) => s >= 90 ? 'text-emerald-600' : s >= 75 ? 'text-blue-600' : s >= 50 ? 'text-amber-600' : 'text-red-600';
+              const getOverallHelper = (s) => {
+                if (s >= 90) return 'Your test case is well-written and covers the requirement effectively.';
+                if (s >= 75) return 'Your test case is good overall, but some areas could be strengthened.';
+                if (s >= 50) return 'Your test case is usable, but some important parts of the requirement are not covered.';
+                return 'Your test case has significant gaps. Consider adding missing information before using it.';
+              };
+
+              const metrics = quality ? [
+                { key: 'completeness', title: 'Completeness', score: quality.completeness?.score ?? quality.completeness_score ?? 0, reason: quality.completeness?.reason ?? '', desc: 'Does the test contain all important information?', tooltip: 'Checks whether the test contains enough information and covers the important parts of the requirement.' },
+                { key: 'clarity', title: 'Clarity', score: quality.clarity?.score ?? quality.clarity_score ?? 0, reason: quality.clarity?.reason ?? '', desc: 'Are the steps easy to follow?', tooltip: 'Checks whether another tester can easily understand and follow the test steps.' },
+                { key: 'relevance', title: 'Relevance', score: quality.relevance?.score ?? quality.relevance_score ?? 0, reason: quality.relevance?.reason ?? '', desc: 'Does it test the requirement?', tooltip: 'Checks whether the test actually verifies the selected requirement.' },
+                { key: 'consistency', title: 'Consistency', score: quality.consistency?.score ?? quality.consistency_score ?? 0, reason: quality.consistency?.reason ?? '', desc: 'Do the parts agree?', tooltip: 'Checks whether the title, description, preconditions, steps and expected result agree with each other.' }
+              ] : [];
+
+              const goodPoints = quality ? metrics.filter(m => m.score >= 75) : [];
+              const improvementPoints = quality ? metrics.filter(m => m.score < 75) : [];
+
+              const covered = quality?.coveredRequirementBehavior || [];
+              const assumptions = quality?.unsupportedAssumptions || [];
+              const suggestions = quality?.suggestions || [];
+
+              return (
+              <div className="space-y-6">
+
+                {/* ============ SECTION 1: Overall Score Hero ============ */}
                 {quality ? (
-                  <div>
-                    <div className="flex flex-col md:flex-row items-center gap-8 mb-8 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                      <div className="text-center">
-                        <span className="text-6xl font-black text-indigo-600 tracking-tighter">{quality.overall_score}</span>
-                        <span className="text-lg text-slate-500 block -mt-1 font-medium">/ 100</span>
+                  <>
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="px-8 pt-8 pb-6">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Sparkles className="w-5 h-5 text-indigo-500" />
+                          <h3 className="text-lg font-bold text-slate-800">AI Quality Review</h3>
+                          <InfoTooltip text="AI evaluates your test case across four quality areas. Scores range from 0–100." />
+                        </div>
+                        <p className="text-sm text-slate-500">How good is this test case?</p>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-slate-800 mb-1 text-lg">Overall Quality Score</h4>
-                        <p className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 ${
-                          quality.overall_score >= 90 ? 'bg-green-100 text-green-700' :
-                          quality.overall_score >= 70 ? 'bg-blue-100 text-blue-700' :
-                          quality.overall_score >= 50 ? 'bg-amber-100 text-amber-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {quality.overall_score >= 90 ? 'Excellent' : quality.overall_score >= 70 ? 'Good' : quality.overall_score >= 50 ? 'Needs Improvement' : 'Poor'}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-4 mb-8">
-                      {[
-                        { title: 'Completeness', score: quality.completeness_score, desc: 'Does the test contain all important information?' },
-                        { title: 'Clarity', score: quality.clarity_score, desc: 'Is the test easy to understand and follow?' },
-                        { title: 'Relevance', score: quality.relevance_score, desc: 'Does the test correctly test the requirement?' },
-                        { title: 'Consistency', score: quality.consistency_score, desc: 'Do the description, steps, and expected result agree?' }
-                      ].map(metric => (
-                        <div key={metric.title} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex items-start gap-4">
-                          <div className={`flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center font-bold text-lg ${
-                            metric.score >= 80 ? 'bg-green-50 text-green-700' : metric.score >= 60 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
-                          }`}>
-                            {metric.score}
+
+                      <div className="px-8 pb-8">
+                        <div className="flex flex-col sm:flex-row items-center gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                          {/* Score circle */}
+                          <div className="relative flex-shrink-0">
+                            <svg viewBox="0 0 120 120" className="w-28 h-28">
+                              <circle cx="60" cy="60" r="52" fill="none" stroke="#e2e8f0" strokeWidth="8" />
+                              <circle cx="60" cy="60" r="52" fill="none" stroke={overallScore >= 90 ? '#10b981' : overallScore >= 75 ? '#3b82f6' : overallScore >= 50 ? '#f59e0b' : '#ef4444'} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(overallScore / 100) * 327} 327`} transform="rotate(-90 60 60)" className="transition-all duration-700" />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className={`text-3xl font-black tracking-tight ${getScoreTextColor(overallScore)}`}>{overallScore}</span>
+                              <span className="text-xs text-slate-400 font-medium -mt-0.5">/ 100</span>
+                            </div>
                           </div>
-                          <div>
-                            <h5 className="font-bold text-slate-800 text-sm mb-0.5">{metric.title}</h5>
-                            <p className="text-xs text-slate-500 mb-2">{metric.desc}</p>
+
+                          {/* Label and explanation */}
+                          <div className="text-center sm:text-left flex-1">
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${getLabelColor(overallScore)} mb-2`}>
+                              {getLabel(overallScore)}
+                            </span>
+                            <p className="text-sm text-slate-600 leading-relaxed">
+                              {getOverallHelper(overallScore)}
+                            </p>
                           </div>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                    
-                    {quality.suggestions && quality.suggestions.length > 0 && (
-                      <div className="bg-indigo-50 p-5 rounded-xl text-sm text-indigo-900 border border-indigo-100 mb-8">
-                        <p className="font-bold mb-3 uppercase tracking-wider text-xs text-indigo-800">Actionable Suggestions</p>
-                        <ul className="space-y-3">
-                          {quality.suggestions.map((s, i) => (
-                            <li key={i} className="flex items-start gap-2">
-                              <span className="text-indigo-500 font-black mt-0.5">•</span> 
-                              <span>{s}</span>
+
+                    {/* ============ SECTION 2: Quality Breakdown ============ */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                      <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">Quality Breakdown</h4>
+                      <p className="text-xs text-slate-500 mb-6">How your test case scores in each quality area.</p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {metrics.map(metric => (
+                          <div key={metric.key} className="bg-slate-50 rounded-xl border border-slate-100 p-5">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1.5">
+                                <h5 className="font-bold text-slate-800 text-sm">{metric.title}</h5>
+                                <InfoTooltip text={metric.tooltip} />
+                              </div>
+                              <span className={`text-lg font-black ${getScoreTextColor(metric.score)}`}>{metric.score}<span className="text-xs font-medium text-slate-400"> / 100</span></span>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden mb-2">
+                              <div className={`h-full rounded-full transition-all duration-700 ${getBarColor(metric.score)}`} style={{ width: `${metric.score}%` }} />
+                            </div>
+
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getLabelColor(metric.score)} mb-2`}>
+                              {getLabel(metric.score)}
+                            </span>
+
+                            {metric.reason && (
+                              <p className="text-xs text-slate-600 leading-relaxed mt-1">{metric.reason}</p>
+                            )}
+                            {!metric.reason && (
+                              <p className="text-xs text-slate-400 italic mt-1">{metric.desc}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ============ SECTION 3: What is already good? ============ */}
+                    {goodPoints.length > 0 && (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">What is already good?</h4>
+                        <p className="text-xs text-slate-500 mb-4">These areas of your test case are strong.</p>
+                        <ul className="space-y-2">
+                          {goodPoints.map(m => (
+                            <li key={m.key} className="flex items-start gap-2.5 text-sm">
+                              <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                              <span className="text-slate-700">
+                                <span className="font-semibold">{m.title}</span>
+                                {m.reason ? ` — ${m.reason}` : ` — scored ${m.score}/100.`}
+                              </span>
+                            </li>
+                          ))}
+                          {covered.length > 0 && covered.map((b, i) => (
+                            <li key={`cov-${i}`} className="flex items-start gap-2.5 text-sm">
+                              <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                              <span className="text-slate-700">{b}</span>
                             </li>
                           ))}
                         </ul>
                       </div>
                     )}
-                    
-                    <button onClick={handleEvaluate} disabled={evaluating} className="w-full font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-3 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                      {evaluating ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>{loadingMsg}</span>
-                        </>
-                      ) : 'Re-evaluate Test Case with AI'}
-                    </button>
-                  </div>
+
+                    {/* ============ SECTION 4: What needs improvement? ============ */}
+                    {(improvementPoints.length > 0 || assumptions.length > 0) && (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">What needs improvement?</h4>
+                        <p className="text-xs text-slate-500 mb-4">These areas could make your test case stronger.</p>
+                        <ul className="space-y-2">
+                          {improvementPoints.map(m => (
+                            <li key={m.key} className="flex items-start gap-2.5 text-sm">
+                              <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                              <span className="text-slate-700">
+                                <span className="font-semibold">{m.title}</span>
+                                {m.reason ? ` — ${m.reason}` : ` — scored ${m.score}/100.`}
+                              </span>
+                            </li>
+                          ))}
+                          {assumptions.length > 0 && assumptions.map((a, i) => (
+                            <li key={`assum-${i}`} className="flex items-start gap-2.5 text-sm">
+                              <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                              <span className="text-slate-700">{a}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* ============ SECTION 5: Requirement Coverage ============ */}
+                    {(covered.length > 0 || assumptions.length > 0) && (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Requirement Coverage</h4>
+                          <InfoTooltip text="Shows which requirement behaviors this test case actually checks, and which are missing." />
+                        </div>
+                        <p className="text-xs text-slate-500 mb-4">What this test actually checks against the requirement.</p>
+
+                        {covered.length > 0 && assumptions.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-3 mb-5 bg-slate-50 px-4 py-3 rounded-xl border border-slate-100">
+                            <span className="text-sm font-bold text-slate-700">{covered.length} of {covered.length + assumptions.length} behaviors covered</span>
+                            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden min-w-[80px]">
+                              <div className={`h-full rounded-full transition-all duration-500 ${getBarColor(Math.round((covered.length / (covered.length + assumptions.length)) * 100))}`} style={{ width: `${Math.round((covered.length / (covered.length + assumptions.length)) * 100)}%` }} />
+                            </div>
+                            <span className={`text-sm font-bold ${getScoreTextColor(Math.round((covered.length / (covered.length + assumptions.length)) * 100))}`}>
+                              {Math.round((covered.length / (covered.length + assumptions.length)) * 100)}%
+                            </span>
+                          </div>
+                        )}
+
+                        {covered.length > 0 && (
+                          <div className="mb-4">
+                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-2">Covered</p>
+                            <ul className="space-y-1.5">
+                              {covered.map((b, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                                  <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                                  <span>{b}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {assumptions.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">Not Covered or Assumed</p>
+                            <ul className="space-y-1.5">
+                              {assumptions.map((a, i) => (
+                                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                                  <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                                  <span>{a}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ============ SECTION 6: How can I improve? ============ */}
+                    {suggestions.length > 0 && (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">How can I improve this test case?</h4>
+                        <p className="text-xs text-slate-500 mb-4">Actionable steps to make your test case stronger.</p>
+                        <ol className="space-y-3">
+                          {suggestions.map((s, i) => (
+                            <li key={i} className="flex items-start gap-3 text-sm">
+                              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                              <span className="text-slate-700 leading-relaxed">{s}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* ============ SECTION 7: What should I do next? ============ */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                      <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">What should I do next?</h4>
+                      <p className="text-sm text-slate-600 mb-5 leading-relaxed">
+                        {overallScore >= 90
+                          ? 'Your test case looks great! You can proceed to execute it or generate more test cases for full requirement coverage.'
+                          : overallScore >= 75
+                          ? 'Your test case is good. Consider addressing the suggestions above to make it even better.'
+                          : overallScore >= 50
+                          ? 'Your test case is usable, but improving requirement coverage would make it stronger.'
+                          : 'Your test case needs significant improvements. Edit the test case to address the missing areas before using it.'}
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        <Link to={`/test-cases/${id}/edit`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-colors">
+                          <FileText className="w-4 h-4" /> Edit Test Case
+                        </Link>
+                        {testCase?.requirement_id && (
+                          <Link to={`/requirements/${testCase.requirement_id}/generate`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-indigo-700 text-sm font-bold rounded-xl border border-indigo-200 hover:bg-indigo-50 transition-colors">
+                            <Sparkles className="w-4 h-4" /> Generate More Test Cases
+                          </Link>
+                        )}
+                        <button onClick={handleEvaluate} disabled={evaluating} className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-slate-700 text-sm font-bold rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                          {evaluating ? <><RefreshCw className="w-4 h-4 animate-spin" /> Evaluating...</> : <><RefreshCw className="w-4 h-4" /> Re-evaluate</>}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-3">Run the evaluation again after you improve the test case.</p>
+                    </div>
+
+                    {/* ============ SECTION 8: AI Information ============ */}
+                    <div className="bg-slate-50 rounded-2xl border border-slate-100 p-6">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">AI Information</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs text-slate-400 mb-0.5">AI Provider Used</p>
+                          <p className="font-semibold text-slate-700 capitalize flex items-center gap-1">
+                            {quality.aiProvider || 'Unknown'}
+                            <InfoTooltip text="Which AI service evaluated this test case. If the primary provider was unavailable, a fallback provider was used automatically." />
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-400 mb-0.5">AI Model</p>
+                          <p className="font-semibold text-slate-700">{quality.aiModel || 'Default'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-400 mb-0.5">Last Evaluated</p>
+                          <p className="font-semibold text-slate-700">
+                            {quality.evaluatedAt ? new Date(quality.evaluatedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown'}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                        <span>How this score was calculated:</span>
+                        <InfoTooltip text="The AI evaluates Completeness, Clarity, Relevance, and Consistency (each 25%). The overall score is the weighted average." />
+                        <span className="font-medium">AI evaluation — 4 dimensions, each worth 25%.</span>
+                      </p>
+                    </div>
+                  </>
                 ) : (
-                  <div className="text-center py-12 bg-slate-50 rounded-2xl border border-slate-100">
-                    <Sparkles className="w-12 h-12 text-indigo-300 mx-auto mb-4 opacity-50" />
-                    <p className="text-sm font-medium text-slate-700 mb-1">No AI quality review yet</p>
-                    <p className="text-xs text-slate-500 mb-6 max-w-sm mx-auto">Ask AI to review this test case for completeness, clarity, relevance, and consistency.</p>
-                    <button onClick={handleEvaluate} disabled={evaluating} className="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mx-auto">
-                      {evaluating ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>{loadingMsg}</span>
-                        </>
-                      ) : 'Evaluate Test Case with AI'}
-                    </button>
-                    <p className="text-[10px] text-slate-400 mt-3">AI provides a review to help you improve the test case, but does not guarantee correctness.</p>
+                  /* ============ EMPTY STATE ============ */
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="text-center py-16 px-8">
+                      <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                        <Sparkles className="w-8 h-8 text-indigo-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-2">No AI quality review yet</h3>
+                      <p className="text-sm text-slate-500 mb-2 max-w-md mx-auto">
+                        Ask AI to review this test case for completeness, clarity, relevance, and consistency.
+                      </p>
+                      <p className="text-xs text-slate-400 mb-8 max-w-sm mx-auto">
+                        The AI will check how well this test case covers the requirement and suggest improvements.
+                      </p>
+                      <button onClick={handleEvaluate} disabled={evaluating} className="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 inline-flex items-center gap-2">
+                        {evaluating ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>{loadingMsg}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" /> Evaluate Test Case with AI
+                          </>
+                        )}
+                      </button>
+                      <p className="text-[10px] text-slate-400 mt-4">AI provides a review to help you improve the test case, but does not guarantee correctness.</p>
+                    </div>
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
           </div>
 

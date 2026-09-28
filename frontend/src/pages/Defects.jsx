@@ -110,7 +110,18 @@ export default function Defects() {
               {loading ? (
                 <tr><td colSpan="6" className="px-5 py-8 text-center text-slate-500">Loading defects...</td></tr>
               ) : defects.length === 0 ? (
-                <tr><td colSpan="6" className="px-5 py-8 text-center text-slate-500">No defects match your filters.</td></tr>
+                <tr>
+                  <td colSpan="6" className="px-5 py-12 text-center text-slate-500">
+                    {!search && !statusFilter ? (
+                      <div>
+                        <p className="font-semibold text-slate-700 mb-1">No defects have been reported yet.</p>
+                        <p className="text-sm">Defects linked to failed test executions will appear here.</p>
+                      </div>
+                    ) : (
+                      <p>No defects match your current filters.</p>
+                    )}
+                  </td>
+                </tr>
               ) : (
                 defects.map(defect => (
                   <tr key={defect.id} onClick={() => navigate(`/defects/${defect.id}`)} className="hover:bg-slate-50 cursor-pointer transition-colors">
